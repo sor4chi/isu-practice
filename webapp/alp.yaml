@@ -1,0 +1,9 @@
+matching_groups:
+  - /posts/[0-9]+
+  - /@\w+
+  - /image/\w+
+  - /js/\w+
+  - /css/\w+
+sort: p99
+reverse: true
+file: ./logs/nginx/access.log
