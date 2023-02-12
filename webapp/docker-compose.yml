@@ -1,6 +1,6 @@
 services:
   nginx:
-    image: nginx:1.22
+    build: etc/nginx/
     volumes:
       - ./etc/nginx/conf.d:/etc/nginx/conf.d
       - ./public:/public
