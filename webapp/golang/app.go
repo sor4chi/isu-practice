@@ -47,7 +47,6 @@ type User struct {
 type Post struct {
 	ID           int       `db:"id"`
 	UserID       int       `db:"user_id"`
-	Imgdata      []byte    `db:"imgdata"`
 	Body         string    `db:"body"`
 	Mime         string    `db:"mime"`
 	CreatedAt    time.Time `db:"created_at"`
@@ -650,14 +649,45 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "INSERT INTO `posts` (`user_id`, `mime`, `imgdata`, `body`) VALUES (?,?,?,?)"
+	query := "INSERT INTO `posts` (`user_id`, `mime`, `body`) VALUES (?,?,?)"
 	result, err := db.Exec(
 		query,
 		me.ID,
 		mime,
-		filedata,
 		r.FormValue("body"),
 	)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	lastID, err := result.LastInsertId()
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	ext := func(mime string) string {
+		switch mime {
+		case "image/jpeg":
+			return "jpg"
+		case "image/png":
+			return "png"
+		case "image/gif":
+			return "gif"
+		default:
+			return ""
+		}
+	}(mime)
+
+	fileName := fmt.Sprintf("public/%d.%s", lastID, ext)
+	f, err := os.Create(fileName)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer f.Close()
+	_, err = f.Write(filedata)
 	if err != nil {
 		log.Print(err)
 		return
@@ -670,38 +700,6 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/posts/"+strconv.FormatInt(pid, 10), http.StatusFound)
-}
-
-func getImage(w http.ResponseWriter, r *http.Request) {
-	pidStr := chi.URLParam(r, "id")
-	pid, err := strconv.Atoi(pidStr)
-	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	post := Post{}
-	err = db.Get(&post, "SELECT * FROM `posts` WHERE `id` = ?", pid)
-	if err != nil {
-		log.Print(err)
-		return
-	}
-
-	ext := chi.URLParam(r, "ext")
-
-	if ext == "jpg" && post.Mime == "image/jpeg" ||
-		ext == "png" && post.Mime == "image/png" ||
-		ext == "gif" && post.Mime == "image/gif" {
-		w.Header().Set("Content-Type", post.Mime)
-		_, err := w.Write(post.Imgdata)
-		if err != nil {
-			log.Print(err)
-			return
-		}
-		return
-	}
-
-	w.WriteHeader(http.StatusNotFound)
 }
 
 func postComment(w http.ResponseWriter, r *http.Request) {
@@ -793,7 +791,7 @@ func postAdminBanned(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/banned", http.StatusFound)
 }
 
-func ConnectDb() *sqlx.DB {
+func main() {
 	host := os.Getenv("ISUCONP_DB_HOST")
 	if host == "" {
 		host = "localhost"
@@ -825,16 +823,11 @@ func ConnectDb() *sqlx.DB {
 		dbname,
 	)
 
-	db, err := sqlx.Connect("mysql", dsn)
+	db, err = sqlx.Open("mysql", dsn)
 	if err != nil {
-		log.Fatalf("Failed to connect to DB.\nError: %s", err.Error())
+		log.Fatalf("Failed to connect to DB: %s.", err.Error())
 	}
 
-	return db
-}
-
-func main() {
-	db = ConnectDb()
 	defer db.Close()
 
 	r := chi.NewRouter()
@@ -849,14 +842,10 @@ func main() {
 	r.Get("/posts", getPosts)
 	r.Get("/posts/{id}", getPostsID)
 	r.Post("/", postIndex)
-	r.Get("/image/{id}.{ext}", getImage)
 	r.Post("/comment", postComment)
 	r.Get("/admin/banned", getAdminBanned)
 	r.Post("/admin/banned", postAdminBanned)
 	r.Get(`/@{accountName:[a-zA-Z]+}`, getAccountName)
-	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-		http.FileServer(http.Dir("../public")).ServeHTTP(w, r)
-	})
 
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
