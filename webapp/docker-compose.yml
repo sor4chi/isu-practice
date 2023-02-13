@@ -25,6 +25,7 @@ services:
       - memcached
     volumes:
       - ./public:/home/public
+      - ./public/images:/home/webapp/public
     init: true
     deploy:
       resources:
