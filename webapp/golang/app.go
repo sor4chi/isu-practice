@@ -109,13 +109,6 @@ func validateUser(accountName, password string) bool {
 		regexp.MustCompile(`\A[0-9a-zA-Z_]{6,}\z`).MatchString(password)
 }
 
-// 今回のGo実装では言語側のエスケープの仕組みが使えないのでOSコマンドインジェクション対策できない
-// 取り急ぎPHPのescapeshellarg関数を参考に自前で実装
-// cf: http://jp2.php.net/manual/ja/function.escapeshellarg.php
-func escapeshellarg(arg string) string {
-	return "'" + strings.Replace(arg, "'", "'\\''", -1) + "'"
-}
-
 func digest(src string) string {
 	hash := sha512.Sum512([]byte(src))
 	return fmt.Sprintf("%x", hash)
@@ -800,7 +793,7 @@ func postAdminBanned(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/banned", http.StatusFound)
 }
 
-func main() {
+func ConnectDb() *sqlx.DB {
 	host := os.Getenv("ISUCONP_DB_HOST")
 	if host == "" {
 		host = "localhost"
@@ -832,10 +825,16 @@ func main() {
 		dbname,
 	)
 
-	db, err = sqlx.Open("mysql", dsn)
+	db, err := sqlx.Connect("mysql", dsn)
 	if err != nil {
-		log.Fatalf("Failed to connect to DB: %s.", err.Error())
+		log.Fatalf("Failed to connect to DB.\nError: %s", err.Error())
 	}
+
+	return db
+}
+
+func main() {
+	db = ConnectDb()
 	defer db.Close()
 
 	r := chi.NewRouter()
