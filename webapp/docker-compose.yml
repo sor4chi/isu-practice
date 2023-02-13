@@ -24,14 +24,15 @@ services:
       - mysql
       - memcached
     volumes:
-      - ./public:/home/public
-      - ./public/images:/home/webapp/public
+      - ./public/image:/home/webapp/public
     init: true
     deploy:
       resources:
         limits:
           cpus: "1"
           memory: 1g
+    depends_on:
+      - mysql
 
   mysql:
     image: mysql:8.0
